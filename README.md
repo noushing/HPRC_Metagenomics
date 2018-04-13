@@ -3,7 +3,9 @@
 Commands for practical session
 
 module load Anaconda/3-5.0.0.1
+
 source activate qiime2-2018.2
+
 module load R_tamu/3.4.2-intel-2017A-Python-2.7.12-default-mt
 
 #========= Importing Data =========
