@@ -1,0 +1,157 @@
+
+module load Anaconda/3-5.0.0.1
+source activate qiime2-2018.2
+module load R_tamu/3.4.2-intel-2017A-Python-2.7.12-default-mt
+
+
+#========= Importing Data =========
+
+
+mkdir $SCRATCH/NGS_metagenomics_Apr18/Runs/FMT
+
+cd $SCRATCH/NGS_metagenomics_Apr18/Runs/FMT 
+
+curl -sL "https://data.qiime2.org/2018.2/tutorials/fmt/sample_metadata.tsv" > "sample-metadata.tsv"
+
+curl -sL "https://data.qiime2.org/2018.2/tutorials/fmt/fmt-tutorial-demux-1-1p.qza" > "fmt-tutorial-demux-1.qza"
+
+curl -sL "https://data.qiime2.org/2018.2/tutorials/fmt/fmt-tutorial-demux-2-1p.qza" > "fmt-tutorial-demux-2.qza"
+
+
+#========= Sequence QC + Making Feature Table using DADA2 =========
+
+#========= Summarization =========
+qiime demux summarize \
+  --i-data fmt-tutorial-demux-1.qza \
+  --o-visualization demux-summary-1.qzv
+
+qiime demux summarize \
+  --i-data fmt-tutorial-demux-2.qza \
+  --o-visualization demux-summary-2.qzv
+
+
+#========= DADA2 =========
+
+qiime dada2 denoise-single \
+  --p-trim-left 13 \
+  --p-trunc-len 150 \
+  --i-demultiplexed-seqs fmt-tutorial-demux-1.qza \
+  --o-representative-sequences rep-seqs-1.qza \
+  --o-table table-1.qza
+
+qiime dada2 denoise-single \
+  --p-trim-left 13 \
+  --p-trunc-len 150 \
+  --i-demultiplexed-seqs fmt-tutorial-demux-2.qza \
+  --o-representative-sequences rep-seqs-2.qza \
+  --o-table table-2.qza
+
+#========= Merging =========
+
+qiime feature-table merge \
+  --i-tables table-1.qza \
+  --i-tables table-2.qza \
+  --o-merged-table table.qza
+
+qiime feature-table merge-seqs \
+  --i-data rep-seqs-1.qza \
+  --i-data rep-seqs-2.qza \
+  --o-merged-data rep-seqs.qza
+
+
+qiime feature-table tabulate-seqs \
+  --i-data rep-seqs.qza \
+  --o-visualization rep-seqs.qzv
+
+#========= Creating tree for phylogenetic diversity analyses =========
+
+qiime alignment mafft \
+  --i-sequences rep-seqs.qza \
+  --o-alignment aligned-rep-seqs.qza
+
+qiime alignment mask \
+  --i-alignment aligned-rep-seqs.qza \
+  --o-masked-alignment masked-aligned-rep-seqs.qza
+
+
+qiime phylogeny fasttree \
+  --i-alignment masked-aligned-rep-seqs.qza \
+  --o-tree unrooted-tree.qza
+
+qiime phylogeny midpoint-root \
+  --i-tree unrooted-tree.qza \
+  --o-rooted-tree rooted-tree.qza
+
+#========= Alpha and Beta =========
+
+#========= Alpha Diversity Analysis and Visualization =========
+
+qiime diversity core-metrics-phylogenetic \
+  --i-phylogeny rooted-tree.qza \
+  --i-table table.qza \
+  --p-sampling-depth 84 \
+  --m-metadata-file sample-metadata.tsv \
+  --output-dir core-metrics-results
+
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity core-metrics-results/faith_pd_vector.qza \
+  --m-metadata-file sample-metadata.tsv \
+  --o-visualization core-metrics-results/faith-pd-group-significance.qzv
+
+qiime diversity alpha-group-significance \
+  --i-alpha-diversity core-metrics-results/evenness_vector.qza \
+  --m-metadata-file sample-metadata.tsv \
+  --o-visualization core-metrics-results/evenness-group-significance.qzv
+
+Testing command:
+qiime metadata tabulate \
+	--m-input-file core-metrics-results/faith_pd_vector.qza \
+	--o-visualization core-metrics-results/faith_pd_vector.qzv
+
+#========= Beta Diversity Analysis and Visualization =========
+
+qiime diversity beta-group-significance \
+  --i-distance-matrix core-metrics-results/unweighted_unifrac_distance_matrix.qza \
+  --m-metadata-file sample-metadata.tsv \
+  --m-metadata-column treatment-group \
+  --o-visualization core-metrics-results/unweighted-unifrac-treatment-group-significance.qzv \
+  --p-pairwise
+
+
+qiime diversity beta-group-significance \
+  --i-distance-matrix core-metrics-results/unweighted_unifrac_distance_matrix.qza \
+  --m-metadata-file sample-metadata.tsv \
+  --m-metadata-column administration-route \
+  --o-visualization core-metrics-results/unweighted-unifrac-administration-route-significance.qzv \
+  --p-pairwise
+
+
+#========= Alpha rarefaction plotting =========
+
+qiime diversity alpha-rarefaction \
+  --i-table table.qza \
+  --i-phylogeny rooted-tree.qza \
+  --p-max-depth 380 \
+  --m-metadata-file sample-metadata.tsv \
+  --o-visualization alpha-rarefaction.qzv
+
+#========= Taxonomic analysis =========
+
+curl -sL "https://data.qiime2.org/2018.2/common/gg-13-8-99-515-806-nb-classifier.qza" > "gg-13-8-99-515-806-nb-classifier.qza"
+
+qiime feature-classifier classify-sklearn \
+  --i-classifier gg-13-8-99-515-806-nb-classifier.qza \
+  --i-reads rep-seqs.qza \
+  --o-classification taxonomy.qza
+
+qiime metadata tabulate \
+  --m-input-file taxonomy.qza \
+  --o-visualization taxonomy.qzv
+
+qiime taxa barplot \
+  --i-table table.qza \
+  --i-taxonomy taxonomy.qza \
+  --m-metadata-file sample-metadata.tsv \
+  --o-visualization taxa-bar-plots.qzv
+
+
