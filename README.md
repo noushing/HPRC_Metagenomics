@@ -9,7 +9,6 @@ module load R_tamu/3.4.2-intel-2017A-Python-2.7.12-default-mt
 
 #========= Importing Data =========
 
-
 mkdir $SCRATCH/NGS_metagenomics_Apr18/Runs/FMT
 
 cd $SCRATCH/NGS_metagenomics_Apr18/Runs/FMT 
